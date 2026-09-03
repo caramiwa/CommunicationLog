@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 760px; margin: 32px auto; padding: 0 18px; color: #202124; }
+    h1 { font-size: 24px; margin-bottom: 6px; }
+    .note { color: #5f6368; margin-bottom: 24px; }
+    label { display: block; font-weight: 600; margin: 16px 0 8px; }
+    input { width: 100%; box-sizing: border-box; padding: 11px; border: 1px solid #dadce0; border-radius: 6px; font-size: 15px; }
+    button { margin-top: 16px; padding: 11px 18px; border: 0; border-radius: 6px; background: #1a73e8; color: white; font-size: 15px; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #f8f9fa; padding: 14px; border-radius: 6px; overflow: auto; }
+    .status { margin-top: 16px; font-weight: 600; }
+    .fields { margin-top: 18px; }
+    .field { padding: 10px 0; border-bottom: 1px solid #eee; }
+    .name { font-size: 12px; color: #5f6368; text-transform: uppercase; }
+    .value { margin-top: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Communication Document Extractor</h1>
+  <div class="note">Phase 2 prototype — enter a Google Drive file ID or Drive URL for a PDF/image.</div>
+
+  <label for="fileRef">Google Drive file ID or URL</label>
+  <input id="fileRef" placeholder="https://drive.google.com/file/d/.../view">
+  <button id="extractButton" onclick="extract()">Extract Document Information</button>
+
+  <div id="status" class="status"></div>
+  <div id="fields" class="fields"></div>
+  <h3>OCR text preview</h3>
+  <pre id="rawText">Nothing extracted yet.</pre>
+  <h3>Machine result</h3>
+  <pre id="json">Nothing extracted yet.</pre>
+
+  <script>
+    function extract() {
+      const ref = document.getElementById('fileRef').value.trim();
+      const button = document.getElementById('extractButton');
+      const status = document.getElementById('status');
+
+      if (!ref) {
+        status.textContent = 'Enter a Drive file ID or URL first.';
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = 'Reading document and running OCR…';
+      document.getElementById('fields').innerHTML = '';
+      document.getElementById('rawText').textContent = '';
+      document.getElementById('json').textContent = '';
+
+      google.script.run
+        .withSuccessHandler(showResult)
+        .withFailureHandler(showError)
+        .extractFromDriveFile(ref);
+    }
+
+    function showResult(result) {
+      document.getElementById('extractButton').disabled = false;
+      document.getElementById('status').textContent = 'Extraction complete: ' + result.fileName;
+
+      const extracted = result.extracted || {};
+      const fields = [
+        ['Date of Document', extracted.dateOfDocument],
+        ['Subject', extracted.subject],
+        ['From', extracted.from],
+        ['To', extracted.to],
+        ['Prominent Text', extracted.prominentText]
+      ];
+
+      document.getElementById('fields').innerHTML = fields.map(function(pair) {
+        return '<div class="field"><div class="name">' + escapeHtml(pair[0]) + '</div>' +
+               '<div class="value">' + escapeHtml(pair[1] || '(blank)') + '</div></div>';
+      }).join('');
+
+      document.getElementById('rawText').textContent = result.rawTextPreview || '(No OCR text returned)';
+      document.getElementById('json').textContent = JSON.stringify(result, null, 2);
+    }
+
+    function showError(error) {
+      document.getElementById('extractButton').disabled = false;
+      document.getElementById('status').textContent = 'Extraction failed';
+      document.getElementById('json').textContent = error && error.message ? error.message : String(error);
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>'"]/g, function(ch) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch];
+      });
+    }
+  </script>
+</body>
+</html>
